@@ -73,3 +73,5 @@ This isn't a particularly extensive interface and it has many limitations:
 - All objects are assumed to be subtypes of `NSObject`. You can use `Retain`/`Release`/`Autorelease` if you really want, although really there will be little need, especially for the first two, since the Max proxy object obviously already retains the Objective-C part.
 
 I've only done the bare minimum for a workable system here, but it should be enough to set you on the way if you need more features. See here for the main Objective-C runtime API if you want to extend it.
+
+[Discuss here.](http://www.blitzbasic.com/Community/posts.php?topic=104657)
