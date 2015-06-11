@@ -64,12 +64,12 @@ I haven't tested this thoroughly, so there might be errors. The core is sound th
 
 This isn't a particularly extensive interface and it has many limitations:
 
-- Objects and classes, being proxy/wrapper objects Max-side, need to be compared with Compare; = and <> aren't guaranteed to work (one object could have multiple wrappers).
+- Objects and classes, being proxy/wrapper objects Max-side, need to be compared with `Compare`; `=` and `<>` aren't guaranteed to work (one object could have multiple wrappers).
 - Fields added to runtime-generated classes are only allowed to have type `id`.
 - Methods need to have a type signature passed along with the implementation when being set (see here - they're not that bad though).
-- Methods accept (and must return) raw Byte Ptrs to the Objective-C objects, not "wrapped" pointers to ObjCObject instances.
-- Methods are invoked with msg (if you want to pass `id` arguments and return an `id`), msgRaw (if you want to pass Byte Ptr arguments, like e.g. C strings, and return an `id`), or msgRaw2 (same as before but also returns a non-wrapped Byte Ptr - used to e.g. retrieve a C string representation).
+- Methods accept (and must return) raw `Byte Ptr`s to the Objective-C objects, not "wrapped" pointers to `ObjCObject` instances.
+- Methods are invoked with `msg` (if you want to pass `id` arguments and return an `id`), `msgRaw` (if you want to pass `Byte Ptr` arguments, like e.g. C strings, and return an `id`), or `msgRaw2` (same as before but also returns a non-wrapped `Byte Ptr` - used to e.g. retrieve a C string representation).
 - Methods can't return floats.
-- All objects are assumed to be subtypes of NSObject. You can use Retain/Release/Autorelease if you really want, although really there will be little need, especially for the first two, since the Max proxy object obviously already retains the Objective-C part.
+- All objects are assumed to be subtypes of `NSObject`. You can use `Retain`/`Release`/`Autorelease` if you really want, although really there will be little need, especially for the first two, since the Max proxy object obviously already retains the Objective-C part.
 
 I've only done the bare minimum for a workable system here, but it should be enough to set you on the way if you need more features. See here for the main Objective-C runtime API if you want to extend it.
