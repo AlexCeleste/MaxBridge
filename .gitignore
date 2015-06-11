@@ -1,0 +1,3 @@
+*.bmx.bak
+.bmx/
+.DS_Store
