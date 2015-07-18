@@ -6,19 +6,14 @@ SuperStrict
 
 Type ObjCClass Extends ObjCObject Abstract
 	Function ForName:ObjCClass(name:String)
-		Local nc:Byte Ptr = name.ToCString(), _class:Byte Ptr = objc_getClass(nc)
-		MemFree(nc)
+		Local _class:Byte Ptr = objc_getClass(name)
 		Return bp2class(_class)
 	End Function
 	Function NewClass:ObjCClass(name:String, _super:ObjCClass, fields:String[])
-		Local cn:Byte Ptr = name.ToCString(), c:Byte Ptr = objc_allocateClassPair(_ObjCClass(_super)._class, cn, 0), enc:Byte Ptr = "@".ToCString()
-		MemFree(cn)
+		Local c:Byte Ptr = objc_allocateClassPair(_ObjCClass(_super)._class, name, 0)
 		For Local fld:String = EachIn fields
-			cn = fld.ToCString()
-			class_addIvar(c, cn, SizeOf cn, Log(SizeOf cn) / Log(2), enc)
-			MemFree(cn)
+			class_addIvar(c, fld, SizeOf c, Log(SizeOf c) / Log(2), "@")
 		Next
-		MemFree(enc)
 		objc_registerClassPair(c)
 		Return bp2class(c)
 	End Function
@@ -40,12 +35,12 @@ Type ObjCObject
 	End Function
 	
 	Method RespondsToSelector:Int(sel:String)
-		Global resp:Byte Ptr ; If Not resp Then resp = SelectorFromString("respondsToSelector:")
-		Local s:Byte Ptr = SelectorFromString(sel)
+		Global resp:Byte Ptr ; If Not resp Then resp = sel_registerName("respondsToSelector:")
+		Local s:Byte Ptr = sel_registerName(sel)
 		Return Int(objc_msgSend1(_self, resp, s))
 	End Method
 	Method msg:ObjCObject(sel:String, a:ObjCObject[] = Null)
-		Local s:Byte Ptr = SelectorFromString(sel)
+		Local s:Byte Ptr = sel_registerName(sel)
 		Select a.Length
 			Case 0 ; Return bp2obj(objc_msgSend0(_self, s))
 			Case 1 ; Return bp2obj(objc_msgSend1(_self, s, a[0]._self))
@@ -59,7 +54,7 @@ Type ObjCObject
 		End Select
 	End Method
 	Method msgRaw:ObjCObject(sel:String, a:Byte Ptr[] = Null)	'for sending raw pointers, e.g. C strings
-		Local s:Byte Ptr = SelectorFromString(sel)
+		Local s:Byte Ptr = sel_registerName(sel)
 		Select a.Length
 			Case 0 ; Return bp2obj(objc_msgSend0(_self, s))
 			Case 1 ; Return bp2obj(objc_msgSend1(_self, s, a[0]))
@@ -73,7 +68,7 @@ Type ObjCObject
 		End Select
 	End Method
 	Method msgRaw2:Byte Ptr(sel:String, a:Byte Ptr[] = Null)	'for sending and receiving raw pointers
-		Local s:Byte Ptr = SelectorFromString(sel)
+		Local s:Byte Ptr = sel_registerName(sel)
 		Select a.Length
 			Case 0 ; Return objc_msgSend0(_self, s)
 			Case 1 ; Return objc_msgSend1(_self, s, a[0])
@@ -94,14 +89,12 @@ Type ObjCObject
 		object_setClass(_self, c._class)
 	End Method
 	Method SetField(f:String, val:ObjCObject)
-		Local cf:Byte Ptr = f.ToCString()
-		object_setInstanceVariable(_self, cf, val._self)
-		MemFree(cf)
+		object_setInstanceVariable(_self, f, val._self)
 	End Method
 	Method GetField:ObjCObject(f:String)
-		Local cf:Byte Ptr = f.ToCString(), _ret:Byte Ptr
-		object_getInstanceVariable(_self, cf, Varptr _ret)
-		MemFree(cf) ; Return bp2obj(_ret)
+		Local _ret:Byte Ptr
+		object_getInstanceVariable(_self, f, Varptr _ret)
+		Return bp2obj(_ret)
 	End Method
 	
 	Method _Retain:ObjCObject()
@@ -132,10 +125,8 @@ End Type
 
 Type ObjCProtocol Abstract
 	Function ForName:ObjCProtocol(name:String)
-		Local nc:Byte Ptr = name.ToCString(), p:Byte Ptr = objc_getProtocol(nc)
-		MemFree(nc)
 		Local prot:_ObjCProtocol = New _ObjCProtocol
-		prot._protocol = p
+		prot._protocol = objc_getProtocol(name)
 		Return prot
 	End Function
 	Method Name:String() Abstract
@@ -143,12 +134,6 @@ End Type
 
 Private
 
-Function SelectorFromString:Byte Ptr(name:String)
-	Local n:Byte Ptr = name.ToCString(), cfn:Byte Ptr = CFStringCreateWithCString(Byte Ptr(0), n, $600)	'kCFStringEncodingASCII
-	Local sel:Byte Ptr = NSSelectorFromString(cfn)
-	CFRelease(cfn) ; MemFree(n)
-	Return sel
-End Function
 Function bp2obj:ObjCObject(bp:Byte Ptr)
 	Local obj:ObjCObject = New ObjCObject
 	obj._self = bp
@@ -166,7 +151,7 @@ Type _ObjCClass Extends ObjCClass Final
 	
 	Method NewObject:ObjCObject()
 		If Not allocSel
-			allocSel = SelectorFromString("alloc") ; initSel = SelectorFromString("init")
+			allocSel = sel_registerName("alloc") ; initSel = sel_registerName("init")
 		EndIf
 		Local _obj:Byte Ptr = objc_msgSend0(_class, allocSel), obj:ObjCObject = bp2obj(_obj)
 		objc_msgSend0(_obj, initSel)
@@ -176,12 +161,11 @@ Type _ObjCClass Extends ObjCClass Final
 		Return class_conformsToProtocol(_class, _ObjCProtocol(prot)._protocol)
 	End Method
 	Method SetMethod:Byte Ptr(name:String, impl:Byte Ptr, types:String)
-		Local sel:Byte Ptr = SelectorFromString(name), ct:Byte Ptr = types.ToCString()
-		Local ret:Byte Ptr = class_replaceMethod(_class, sel, impl, ct)
-		MemFree(ct) ; Return ret
+		Local sel:Byte Ptr = sel_registerName(name)
+		Return class_replaceMethod(_class, sel, impl, types)
 	End Method
 	Method GetMethod:Byte Ptr(name:String)
-		Local sel:Byte Ptr = SelectorFromString(name)
+		Local sel:Byte Ptr = sel_registerName(name)
 		Return class_getMethodImplementation(_class, sel)
 	End Method
 	Method Name:String()
@@ -216,20 +200,20 @@ Type _ObjCProtocol Extends ObjCProtocol Final
 End Type
 
 Extern
-	Function objc_getClass:Byte Ptr(name_cstr:Byte Ptr)
-	Function objc_allocateClassPair:Byte Ptr(_super:Byte Ptr, name_cstr:Byte Ptr, extra:Int)
-	Function class_addIvar:Int(_class:Byte Ptr, name_cstr:Byte Ptr, size:Int, alignment:Byte, types_cstr:Byte Ptr)
+	Function objc_getClass:Byte Ptr(name$z)
+	Function objc_allocateClassPair:Byte Ptr(_super:Byte Ptr, name$z, extra:Int)
+	Function class_addIvar:Int(_class:Byte Ptr, name$z, size:Int, alignment:Byte, types$z)
 	Function objc_registerClassPair(_class:Byte Ptr)
 	
 	Function class_getName:Byte Ptr(_class:Byte Ptr)
 	Function class_conformsToProtocol:Int(_class:Byte Ptr, _prot:Byte Ptr)
-	Function class_replaceMethod:Byte Ptr(_class:Byte Ptr, name_sel:Byte Ptr, imp:Byte Ptr, types_cstr:Byte Ptr)
+	Function class_replaceMethod:Byte Ptr(_class:Byte Ptr, name_sel:Byte Ptr, imp:Byte Ptr, types$z)
 	Function class_getMethodImplementation:Byte Ptr(_class:Byte Ptr, name_sel:Byte Ptr)
 	
 	Function object_getClass:Byte Ptr(o:Byte Ptr)
 	Function object_setClass:Byte Ptr(o:Byte Ptr, c:Byte Ptr)
-	Function object_setInstanceVariable:Byte Ptr(o:Byte Ptr, f_cstr:Byte Ptr, val:Byte Ptr)
-	Function object_getInstanceVariable:Byte Ptr(o:Byte Ptr, f_cstr:Byte Ptr, ret:Byte Ptr Ptr)
+	Function object_setInstanceVariable:Byte Ptr(o:Byte Ptr, f$z, val:Byte Ptr)
+	Function object_getInstanceVariable:Byte Ptr(o:Byte Ptr, f$z, ret:Byte Ptr Ptr)
 	
 	Function objc_msgSend0:Byte Ptr(_self:Byte Ptr, sel:Byte Ptr) = "objc_msgSend"
 	Function objc_msgSend1:Byte Ptr(_self:Byte Ptr, sel:Byte Ptr, _0:Byte Ptr) = "objc_msgSend"
@@ -241,11 +225,11 @@ Extern
 	Function objc_msgSend7:Byte Ptr(_self:Byte Ptr, sel:Byte Ptr, _0:Byte Ptr, _1:Byte Ptr, _2:Byte Ptr, _3:Byte Ptr, _4:Byte Ptr, _5:Byte Ptr, _6:Byte Ptr) = "objc_msgSend"
 	Function objc_msgSend8:Byte Ptr(_self:Byte Ptr, sel:Byte Ptr, _0:Byte Ptr, _1:Byte Ptr, _2:Byte Ptr, _3:Byte Ptr, _4:Byte Ptr, _5:Byte Ptr, _6:Byte Ptr, _7:Byte Ptr) = "objc_msgSend"
 	
-	Function objc_getProtocol:Byte Ptr(name_cstr:Byte Ptr)
+	Function objc_getProtocol:Byte Ptr(name$z)
 	Function protocol_getName:Byte Ptr(_prot:Byte Ptr)
 	
-	Function CFStringCreateWithCString:Byte Ptr(_null:Byte Ptr, cstr:Byte Ptr, encoding:Int)
-	Function NSSelectorFromString:Byte Ptr(name_cfstr:Byte Ptr)
+	Function sel_registerName:Byte Ptr(name$z)
+	
 	Function CFRetain:Byte Ptr(o:Byte Ptr)
 	Function CFRelease(o:Byte Ptr)
 	Function CFAutorelease:Byte Ptr(o:Byte Ptr)
